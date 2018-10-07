@@ -1,5 +1,6 @@
 package com.alibaba.ttl.reported_bugs
 
+import com.alibaba.noTtlAgentRun
 import com.alibaba.ttl.TransmittableThreadLocal
 import com.alibaba.ttl.TtlRunnable
 import org.junit.Assert.assertEquals
@@ -23,15 +24,16 @@ class Bug70_Test {
         assertEquals(hello, threadLocal.get())
 
         val futureTask = FutureTask<String> { threadLocal.get() }.also {
-            executorService.submit(TtlRunnable.get(it))
-                    .get()
+            val runnable = if (noTtlAgentRun()) TtlRunnable.get(it) else it
+            executorService.submit(runnable).get()
         }
         assertEquals(hello, futureTask.get())
 
         val taskRef = AtomicReference<FutureTask<String>>()
         thread(name = "the thread for run executor action") {
             FutureTask<String> { threadLocal.get() }.also {
-                executorService.submit(TtlRunnable.get(it, false, false))
+                val runnable = if (noTtlAgentRun()) TtlRunnable.get(it, false, false) else it
+                executorService.submit(runnable)
                 taskRef.set(it)
             }
         }.join()
