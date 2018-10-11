@@ -2,6 +2,7 @@
 
 package com.alibaba
 
+import com.alibaba.ttl.NoInheritableTTL
 import com.alibaba.ttl.TransmittableThreadLocal
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -40,11 +41,11 @@ internal const val CHILD_CREATE = "child-create"
 
 typealias  TtlInstances<T> = ConcurrentMap<String, TransmittableThreadLocal<T>>
 
-fun createParentTtlInstances(ttlInstances: TtlInstances<String> = ConcurrentHashMap()): TtlInstances<String> {
+fun createParentTtlInstances(ttlInstances: TtlInstances<String> = ConcurrentHashMap(), noInherit: Boolean = false): TtlInstances<String> {
     printTtlInstances(ttlInstances, "Before run(createParentTtlInstances):")
 
     listOf(PARENT_CREATE_UNMODIFIED_IN_CHILD, PARENT_CREATE_MODIFIED_IN_CHILD).forEach {
-        newTtlInstanceAndPut(it, ttlInstances)
+        newTtlInstanceAndPut(it, ttlInstances, noInherit)
     }
 
     printTtlInstances(ttlInstances, "After run(createParentTtlInstances):")
@@ -88,10 +89,18 @@ fun modifyParentTtlInstances(tag: String, ttlInstances: TtlInstances<String>): T
     return copyTtlValues(ttlInstances)
 }
 
-fun newTtlInstanceAndPut(key: String, ttlInstances: TtlInstances<String>): TransmittableThreadLocal<String> {
-    val ttl = object : TransmittableThreadLocal<String>() {
-        override fun toString(): String {
-            return "${super.toString()}(${get()})"
+fun newTtlInstanceAndPut(key: String, ttlInstances: TtlInstances<String>, noInherit: Boolean = false): TransmittableThreadLocal<String> {
+    val ttl = if (noInherit) {
+        object : NoInheritableTTL<String>() {
+            override fun toString(): String {
+                return "${super.toString()}(${get()})"
+            }
+        }
+    } else {
+        object : TransmittableThreadLocal<String>() {
+            override fun toString(): String {
+                return "${super.toString()}(${get()})"
+            }
         }
     }
     ttl.set(key)
@@ -141,14 +150,25 @@ fun <T> assertChildTtlValues(tag: String, values: TtlValues<T>) {
     )
 }
 
-fun <T> assertChildTtlValuesWithParentCreateAfterCreateChild(tag: String, values: TtlValues<T>) {
-    assertTtlValues(
-            mapOf(PARENT_CREATE_MODIFIED_IN_CHILD to PARENT_CREATE_MODIFIED_IN_CHILD + tag,
-                    PARENT_CREATE_UNMODIFIED_IN_CHILD to PARENT_CREATE_UNMODIFIED_IN_CHILD,
-                    CHILD_CREATE + tag to CHILD_CREATE + tag,
-                    PARENT_CREATE_AFTER_CREATE_CHILD to PARENT_CREATE_AFTER_CREATE_CHILD),
-            values
-    )
+
+fun <T> assertChildTtlValuesWithParentCreateAfterCreateChild(tag: String, values: TtlValues<T>, noInherit: Boolean = false) {
+    if (noInherit) {
+        // if Inheritable is disabled,  PARENT_CREATE_UNMODIFIED_IN_CHILD will not be seen
+        // and PARENT_CREATE_MODIFIED_IN_CHILD will be modified on null value.
+        assertTtlValues(
+                mapOf(PARENT_CREATE_MODIFIED_IN_CHILD to "null$tag",
+                        CHILD_CREATE + tag to CHILD_CREATE + tag),
+                values
+        )
+    } else {
+        assertTtlValues(
+                mapOf(PARENT_CREATE_MODIFIED_IN_CHILD to PARENT_CREATE_MODIFIED_IN_CHILD + tag,
+                        PARENT_CREATE_UNMODIFIED_IN_CHILD to PARENT_CREATE_UNMODIFIED_IN_CHILD,
+                        CHILD_CREATE + tag to CHILD_CREATE + tag,
+                        PARENT_CREATE_AFTER_CREATE_CHILD to PARENT_CREATE_AFTER_CREATE_CHILD),
+                values
+        )
+    }
 }
 
 fun <T> assertParentTtlValues(values: TtlValues<T>) {

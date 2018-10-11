@@ -17,6 +17,8 @@ import java.util.logging.Logger;
  * Note: {@link TransmittableThreadLocal} extends {@link java.lang.InheritableThreadLocal},
  * so {@link TransmittableThreadLocal} first is a {@link java.lang.InheritableThreadLocal}.
  *
+ * Caution: Potential leaking problem maybe introduced by {@link InheritableThreadLocal}, you can use {@link NoInheritableTTL} instead.
+ *
  * @author Jerry Lee (oldratlee at gmail dot com)
  * @see TtlRunnable
  * @see TtlCallable
